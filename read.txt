@@ -1,1 +1,0 @@
-nodemon --watch . --ext go --exec "go run main.go"
