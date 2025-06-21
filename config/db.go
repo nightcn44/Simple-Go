@@ -1,32 +1,52 @@
 package config
 
 import (
-	"backend/models"
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
+	"github.com/joho/godotenv"
+	"bn/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var DB *gorm.DB
+var DB *mongo.Client
 
 func ConnectDB() {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true",
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASS"),
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_NAME"),
-	)
-
-	database, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Failed to connect to database: ", err)
+		log.Fatal("Error loading .env file")
 	}
 
-	DB = database
-	log.Println("Database connected")
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		log.Fatal("MONGO_URI not set in .env file")
+	}
 
-	DB.AutoMigrate(&models.User{})
+	clientOptions := options.Client().ApplyURI(mongoURI)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := mongo.Connect(ctx, clientOptions)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = client.Ping(ctx, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	DB = client
+	fmt.Println("Connected to MongoDB!")
+}
+
+func GetCollection(collectionName string) *mongo.Collection {
+	dbName := os.Getenv("DB_NAME")
+	if dbName == "" {
+		log.Fatal("DB_NAME not set in .env file")
+	}
+	return DB.Database(dbName).Collection(collectionName)
 }
